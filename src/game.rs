@@ -56,13 +56,26 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for UserShared {
                 let message: MessageC2S = serde_json::from_str(&text).unwrap();
                 match message {
                     MessageC2S::CreateRoom { name } => {
+                        if name.trim().is_empty() {
+                            self.send_message(MessageS2C::SendAlert {
+                                text: "name cannot be empty".to_string(),
+                            });
+                            return;
+                        }
                         *self.user.name.write().unwrap() = Some(name);
                         let in_lobby = self.user.lobby.lock().unwrap().is_some();
                         assert!(!in_lobby);
                         let lobby = self.user.lobby_list.create();
+                        *self.user.lobby.lock().unwrap() = Some(lobby.clone());
                         assert!(lobby.player_try_join(self));
                     }
                     MessageC2S::JoinRoom { name, room_id } => {
+                        if name.trim().is_empty() {
+                            self.send_message(MessageS2C::SendAlert {
+                                text: "name cannot be empty".to_string(),
+                            });
+                            return;
+                        }
                         *self.user.name.write().unwrap() = Some(name);
                         let in_lobby = self.user.lobby.lock().unwrap().is_some();
                         assert!(!in_lobby);
@@ -112,10 +125,12 @@ impl Lobby {
         true
     }
     pub fn player_leave(&self, player: &UserShared) {
+        println!("leave: {}", self.users.lock().unwrap().len());
         self.users
             .lock()
             .unwrap()
             .remove(player.user.name.read().unwrap().as_ref().unwrap().as_str());
+        println!("leavep: {}", self.users.lock().unwrap().len());
         self.resend_ui();
     }
     pub fn resend_ui(&self) {
